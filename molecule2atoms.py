@@ -18,13 +18,7 @@ import re
 from collections import defaultdict
 from itertools import chain
 
-SquareRe = re.compile('\[.*\]\d*')
-RoundRe = re.compile('\(.*\)\d*')
-CurlyRe =re.compile('\{.*\}\d*')
-NumberRe = re.compile('\d*$')
-matchers = [SquareRe, RoundRe, CurlyRe]
-
-def countAtoms(molecule, count=None, multiplier=1):
+def countAtoms(molecule, count=defaultdict(int), multiplier=1):
 	Atom1 = re.compile('[A-Z]\d*')
 	Atom2 = re.compile('[A-Z][a-z]\d*')
 	Numbers = re.compile('\d+$')
@@ -44,34 +38,41 @@ def countAtoms(molecule, count=None, multiplier=1):
 		else:
 			count[atom] += 1*multiplier
 	return count
-#print(countAtoms('SO3'))
 
-def findSubmolecules(molecule,count,multiplier=1):
-	#import pdb; pdb.set_trace()
-	#print(indent, 'molecule', molecule, 'count', count)
-	for matcher in matchers:
-		m = matcher.search(molecule)
-		if m is not None:
-			_start, _end = m.span()
-			submolecule = molecule[_start+1:_end-2]
-			import pdb; pdb.set_trace()
-			submolecule_multiplier = int(NumberRe.findall(molecule[_start:_end])[0])
 
-			submolecule = findSubmolecules(submolecule, count, multiplier=multiplier*submolecule_multiplier)
+def findSubmolecules(molecule,count=defaultdict(int), multiplier=1):
+	brackets = {'(': ')', '[': ']', '{': '}'}
+	match_str = '''\%s.*?\%s\d*'''	
+	bracket_re = re.compile('[\[\(\{]')
+	MultRe = re.compile('[\]\}\)]\d+$')
+	while bracket_re.search(molecule) is not None:
+		submolecule_open = bracket_re.search(molecule).group()
+		m = re.compile(match_str % (submolecule_open, brackets[submolecule_open])).search(molecule)
+		submolecule = re.compile('''\%s.*\%s''' % (submolecule_open, brackets[submolecule_open])).search(m.group()).group()[1:-1]
+		m_multiplier = MultRe.search(m.group())
+		if m_multiplier is  not None:
+			s_multiplier = int(m_multiplier.group()[1:])
+		else:
+			s_multiplier = 1
 
-			count = countAtoms(submolecule, count , multiplier*submolecule_multiplier)
-			molecule = molecule.replace(molecule[_start:_end], '')
-			
-
+		if bracket_re.search(submolecule) is None:
+			count = countAtoms(submolecule, count=count, multiplier=multiplier*s_multiplier)
+		else:
+			submolecule = findSubmolecules(submolecule, count=count, multiplier=multiplier*s_multiplier)
+		molecule = molecule.replace(m.group(),'')
+	count = countAtoms(molecule, count=count, multiplier=multiplier)
 	return molecule
 
 def parse_molecule(formula):
 	count = defaultdict(int)		
 	formula =findSubmolecules(formula, count)
-	count = countAtoms(formula,count)
 	return count
 
-#print(parse_molecule('H2O'))
-#print(parse_molecule('Mg(OH)2'))
-#print(parse_molecule('K4[ON(SO3)2]2'))
-parse_molecule('(C5H5)Fe(CO)2CH3')
+print(parse_molecule('H2O'))
+print(parse_molecule('Mg(OH)2'))
+print(parse_molecule('K4[ON(SO3)2]2'))
+print(parse_molecule('(C5H5)Fe(CO)2CH3'))
+print(parse_molecule('BCo3(CO2)3'))f
+print(parse_molecule('Be4C5[BCo3(CO2)3]2'))
+print(parse_molecule('As2{Be4C5[BCo3(CO2)3]2}4Cu5'))
+
